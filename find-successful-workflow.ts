@@ -29,7 +29,7 @@ let BASE_SHA: string;
     } else {
       process.stdout.write("\n");
       process.stdout.write(
-        `WARNING: Working directory '${workingDirectory}' doesn't exist.\n`
+        `WARNING: Working directory '${workingDirectory}' doesn't exist.\n`,
       );
     }
   }
@@ -49,7 +49,7 @@ let BASE_SHA: string;
       const baseResult = spawnSync(
         "git",
         ["merge-base", `origin/${mainBranchName}`, mergeBaseRef],
-        { encoding: "utf-8" }
+        { encoding: "utf-8" },
       );
       BASE_SHA = baseResult.stdout;
     } catch (e) {
@@ -64,7 +64,7 @@ let BASE_SHA: string;
         owner,
         repo,
         mainBranchName,
-        lastSuccessfulEvent
+        lastSuccessfulEvent,
       );
     } catch (e) {
       core.setFailed(e.message);
@@ -76,27 +76,27 @@ let BASE_SHA: string;
         reportFailure(mainBranchName);
         return;
       } else {
-        process.stdout.write(   "\n");
+        process.stdout.write("\n");
         process.stdout.write(
-          `WARNING: Unable to find a successful workflow run on 'origin/${mainBranchName}', or the latest successful workflow was connected to a commit which no longer exists on that branch (e.g. if that branch was rebased)\n`
+          `WARNING: Unable to find a successful workflow run on 'origin/${mainBranchName}', or the latest successful workflow was connected to a commit which no longer exists on that branch (e.g. if that branch was rebased)\n`,
         );
         process.stdout.write(
-          `We are therefore defaulting to use HEAD~1 on 'origin/${mainBranchName}'\n`
+          `We are therefore defaulting to use HEAD~1 on 'origin/${mainBranchName}'\n`,
         );
         process.stdout.write("\n");
         process.stdout.write(
-          `NOTE: You can instead make this a hard error by setting 'error-on-no-successful-workflow' on the action in your workflow.\n`
+          `NOTE: You can instead make this a hard error by setting 'error-on-no-successful-workflow' on the action in your workflow.\n`,
         );
         process.stdout.write("\n");
 
         const commitCountOutput = spawnSync(
           "git",
           ["rev-list", "--count", `origin/${mainBranchName}`],
-          { encoding: "utf-8" }
+          { encoding: "utf-8" },
         ).stdout;
         const commitCount = parseInt(
           stripNewLineEndings(commitCountOutput),
-          10
+          10,
         );
 
         const LAST_COMMIT_CMD = `origin/${mainBranchName}${
@@ -111,7 +111,7 @@ let BASE_SHA: string;
     } else {
       process.stdout.write("\n");
       process.stdout.write(
-        `Found the last successful workflow run on 'origin/${mainBranchName}'\n`
+        `Found the last successful workflow run on 'origin/${mainBranchName}'\n`,
       );
       process.stdout.write(`Commit: ${BASE_SHA}\n`);
     }
@@ -139,6 +139,8 @@ function proxyPlugin(octokit: Octokit): void {
   });
 }
 
+const messagesToSkip = ["[skip ci]"];
+
 /**
  * Find last successful workflow run on the repo
  */
@@ -148,7 +150,7 @@ async function findSuccessfulCommit(
   owner: string,
   repo: string,
   branch: string,
-  lastSuccessfulEvent: string
+  lastSuccessfulEvent: string,
 ): Promise<string | undefined> {
   const octokit = new ProxifiedClient();
   if (!workflow_id) {
@@ -162,7 +164,7 @@ async function findSuccessfulCommit(
       .then(({ data: { workflow_id } }) => workflow_id);
     process.stdout.write("\n");
     process.stdout.write(
-      `Workflow Id not provided. Using workflow '${workflow_id}'\n`
+      `Workflow Id not provided. Using workflow '${workflow_id}'\n`,
     );
   }
   // fetch all workflow runs on a given repo/branch/workflow with push and success
@@ -177,13 +179,50 @@ async function findSuccessfulCommit(
         workflow_id,
         event: lastSuccessfulEvent,
         status: "success",
-      }
+      },
     )
     .then(({ data: { workflow_runs } }) =>
-      workflow_runs.map((run: { head_sha: any }) => run.head_sha)
+      workflow_runs.map((run: { head_sha: any }) => run.head_sha),
     );
 
-  return await findExistingCommit(octokit, branch, shas);
+  const headSha = await findExistingCommit(octokit, branch, shas);
+  if (!headSha) {
+    return headSha;
+  }
+  process.stdout.write(
+    `Checking commits from "${headSha}" onwards for skip ci messages\n`,
+  );
+  // now we have the commit, step forward and find the next few commits that don't have [skip ci]
+  const commits = (
+    await octokit.request("GET /repos/{owner}/{repo}/commits", {
+      owner,
+      repo,
+      sha: headSha,
+      per_page: 100,
+    })
+  ).data.map((c) => {
+    return {
+      sha: c.sha,
+      message: c.commit.message,
+    };
+  });
+  process.stdout.write(`Got ${commits.length} commits:\n`);
+
+  let shaResult = headSha;
+  for (const commit of commits) {
+    const containsAnySkipMessages = messagesToSkip.some(
+      (m) => commit.message.indexOf(m) >= 0,
+    );
+    process.stdout.write(
+      `[${commit.sha}][${containsAnySkipMessages}]: ${commit.message}\n`,
+    );
+    if (containsAnySkipMessages) {
+      shaResult = commit.sha;
+      continue;
+    }
+    return shaResult;
+  }
+  return shaResult;
 }
 
 async function findMergeBaseRef(): Promise<string> {
@@ -198,7 +237,7 @@ async function findMergeBaseRef(): Promise<string> {
 function findMergeQueuePr(): string {
   const { head_ref, base_sha } = github.context.payload.merge_group;
   const result = new RegExp(
-    `^refs/heads/gh-readonly-queue/${mainBranchName}/pr-(\\d+)-${base_sha}$`
+    `^refs/heads/gh-readonly-queue/${mainBranchName}/pr-(\\d+)-${base_sha}$`,
   ).exec(head_ref);
   return result ? result.at(1) : undefined;
 }
@@ -213,7 +252,7 @@ async function findMergeQueueBranch(): Promise<string> {
   const octokit = new ProxifiedClient();
   const result = await octokit.request(
     `GET /repos/${owner}/${repo}/pulls/${pull_number}`,
-    { owner, repo, pull_number: +pull_number }
+    { owner, repo, pull_number: +pull_number },
   );
   return result.data.head.ref;
 }
@@ -224,7 +263,7 @@ async function findMergeQueueBranch(): Promise<string> {
 async function findExistingCommit(
   octokit: Octokit,
   branchName: string,
-  shas: string[]
+  shas: string[],
 ): Promise<string | undefined> {
   for (const commitSha of shas) {
     if (await commitExists(octokit, branchName, commitSha)) {
@@ -240,7 +279,7 @@ async function findExistingCommit(
 async function commitExists(
   octokit: Octokit,
   branchName: string,
-  commitSha: string
+  commitSha: string,
 ): Promise<boolean> {
   try {
     spawnSync("git", ["cat-file", "-e", commitSha], {
@@ -263,7 +302,7 @@ async function commitExists(
     });
 
     return commits.data.some(
-      (commit: { sha: string }) => commit.sha === commitSha
+      (commit: { sha: string }) => commit.sha === commitSha,
     );
   } catch {
     return false;
@@ -275,4 +314,145 @@ async function commitExists(
  */
 function stripNewLineEndings(string: string): string {
   return string.replace("\n", "");
+}
+
+export interface Commit {
+  url: string;
+  sha: string;
+  node_id: string;
+  html_url: string;
+  comments_url: string;
+  commit: {
+    url: string;
+    author: null | GitUser;
+    committer: null | GitUser1;
+    message: string;
+    comment_count: number;
+    tree: {
+      sha: string;
+      url: string;
+      [k: string]: unknown;
+    };
+    verification?: Verification;
+    [k: string]: unknown;
+  };
+  author: null | SimpleUser;
+  committer: null | SimpleUser1;
+  parents: {
+    sha: string;
+    url: string;
+    html_url?: string;
+    [k: string]: unknown;
+  }[];
+  stats?: {
+    additions?: number;
+    deletions?: number;
+    total?: number;
+    [k: string]: unknown;
+  };
+  files?: DiffEntry[];
+  [k: string]: unknown;
+}
+/**
+ * Metaproperties for Git author/committer information.
+ */
+export interface GitUser {
+  name?: string;
+  email?: string;
+  date?: string;
+  [k: string]: unknown;
+}
+/**
+ * Metaproperties for Git author/committer information.
+ */
+export interface GitUser1 {
+  name?: string;
+  email?: string;
+  date?: string;
+  [k: string]: unknown;
+}
+export interface Verification {
+  verified: boolean;
+  reason: string;
+  payload: string | null;
+  signature: string | null;
+  [k: string]: unknown;
+}
+/**
+ * A GitHub user.
+ */
+export interface SimpleUser {
+  name?: string | null;
+  email?: string | null;
+  login: string;
+  id: number;
+  node_id: string;
+  avatar_url: string;
+  gravatar_id: string | null;
+  url: string;
+  html_url: string;
+  followers_url: string;
+  following_url: string;
+  gists_url: string;
+  starred_url: string;
+  subscriptions_url: string;
+  organizations_url: string;
+  repos_url: string;
+  events_url: string;
+  received_events_url: string;
+  type: string;
+  site_admin: boolean;
+  starred_at?: string;
+  [k: string]: unknown;
+}
+/**
+ * A GitHub user.
+ */
+export interface SimpleUser1 {
+  name?: string | null;
+  email?: string | null;
+  login: string;
+  id: number;
+  node_id: string;
+  avatar_url: string;
+  gravatar_id: string | null;
+  url: string;
+  html_url: string;
+  followers_url: string;
+  following_url: string;
+  gists_url: string;
+  starred_url: string;
+  subscriptions_url: string;
+  organizations_url: string;
+  repos_url: string;
+  events_url: string;
+  received_events_url: string;
+  type: string;
+  site_admin: boolean;
+  starred_at?: string;
+  [k: string]: unknown;
+}
+/**
+ * Diff Entry
+ */
+export interface DiffEntry {
+  sha: string;
+  filename: string;
+  status:
+    | "added"
+    | "removed"
+    | "modified"
+    | "renamed"
+    | "copied"
+    | "changed"
+    | "unchanged";
+  additions: number;
+  deletions: number;
+  changes: number;
+  blob_url: string;
+  raw_url: string;
+  contents_url: string;
+  patch?: string;
+  previous_filename?: string;
+  [k: string]: unknown;
 }
