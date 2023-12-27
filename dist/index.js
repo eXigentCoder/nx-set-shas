@@ -37870,6 +37870,13 @@ const workflowId = process.argv[7];
 const getLastSkippedCommitAfterBase = process.argv[8];
 const defaultWorkingDirectory = ".";
 const ProxifiedClient = action_1.Octokit.plugin(proxyPlugin);
+const messagesToSkip = [
+    "[skip ci]",
+    "[ci skip]",
+    "[no ci]",
+    "[skip actions]",
+    "[actions skip]",
+];
 let BASE_SHA;
 (() => __awaiter(void 0, void 0, void 0, function* () {
     if (workingDirectory !== defaultWorkingDirectory) {
@@ -37906,14 +37913,6 @@ let BASE_SHA;
             core.setFailed(e.message);
             return;
         }
-        //todo move to inputs
-        const messagesToSkip = [
-            "[skip ci]",
-            "[ci skip]",
-            "[no ci]",
-            "[skip actions]",
-            "[actions skip]",
-        ];
         if (getLastSkippedCommitAfterBase && BASE_SHA) {
             try {
                 BASE_SHA = yield findLastSkippedCommitAfterSha(stripNewLineEndings(BASE_SHA), stripNewLineEndings(HEAD_SHA), messagesToSkip, mainBranchName);
