@@ -38102,7 +38102,7 @@ function findLastSkippedCommitAfterSha(baseSha, headSha, messagesToSkip = [], br
                 newBaseSha = commit.sha;
                 continue;
             }
-            return newBaseSha;
+            return commit.sha;
         }
         return newBaseSha;
     });
