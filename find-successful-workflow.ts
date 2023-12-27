@@ -17,7 +17,7 @@ const errorOnNoSuccessfulWorkflow = process.argv[4];
 const lastSuccessfulEvent = process.argv[5];
 const workingDirectory = process.argv[6];
 const workflowId = process.argv[7];
-const getLastSkippedCommitAfterBase = process.argv[8];
+const getLastSkippedCommitAfterBase = process.argv[8] === "true" ? true : false;
 const defaultWorkingDirectory = ".";
 
 const ProxifiedClient = Octokit.plugin(proxyPlugin);
