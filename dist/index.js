@@ -37867,6 +37867,7 @@ const errorOnNoSuccessfulWorkflow = process.argv[4];
 const lastSuccessfulEvent = process.argv[5];
 const workingDirectory = process.argv[6];
 const workflowId = process.argv[7];
+const getLastSkippedCommitAfterBase = process.argv[8];
 const defaultWorkingDirectory = ".";
 const ProxifiedClient = action_1.Octokit.plugin(proxyPlugin);
 let BASE_SHA;
@@ -37906,10 +37907,21 @@ let BASE_SHA;
             return;
         }
         //todo move to inputs
-        const getLastSkippedCommitAfterBase = true;
-        const messagesToSkip = ["[skip ci]"];
+        const messagesToSkip = [
+            "[skip ci]",
+            "[ci skip]",
+            "[no ci]",
+            "[skip actions]",
+            "[actions skip]",
+        ];
         if (getLastSkippedCommitAfterBase && BASE_SHA) {
-            BASE_SHA = yield findLastSkippedCommitAfterSha(stripNewLineEndings(BASE_SHA), stripNewLineEndings(HEAD_SHA), messagesToSkip, mainBranchName);
+            try {
+                BASE_SHA = yield findLastSkippedCommitAfterSha(stripNewLineEndings(BASE_SHA), stripNewLineEndings(HEAD_SHA), messagesToSkip, mainBranchName);
+            }
+            catch (e) {
+                core.setFailed(e.message);
+                return;
+            }
         }
         if (!BASE_SHA) {
             if (errorOnNoSuccessfulWorkflow === "true") {
@@ -38098,6 +38110,9 @@ function findLastSkippedCommitAfterSha(baseSha, headSha, messagesToSkip = [], br
         return newBaseSha;
     });
 }
+/**
+ * Finds all commits between two provided commits
+ */
 function findAllCommitsBetweenShas(octokit, branchName, baseCommit, headCommit, page = 1) {
     return __awaiter(this, void 0, void 0, function* () {
         process.stdout.write(`Finding all commits on branch "${branchName}" between ${baseCommit.sha}|${baseCommit.date} and ${headCommit.sha}|${headCommit.date}, page: ${page}\n`);
